@@ -1,6 +1,8 @@
 
+import { Todo } from '@/generated/prisma';
 import prisma from '@/lib/prisma';
-import { NextResponse, NextRequest } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server';
+import * as yup from 'yup';
 
 interface Segments{
   params: {
@@ -8,15 +10,19 @@ interface Segments{
   }
 }
 
-export async function GET(request: Request, {params}: Segments) {
-
-  const {id} = params;
-
-  const todo=await prisma.todo.findUnique({
+const getTodo= async(id:string):Promise<Todo | null>=>{
+  const todo= await prisma.todo.findUnique({
     where:{
       id
     }
   })
+  return todo;
+}
+
+export async function GET(request: Request, {params}: Segments) {
+
+  const { id } = await params;
+  const todo=await getTodo(id);
 
   if(!todo){  
     return NextResponse.json({message:`Todo con id ${id} no encontrado`}, {status:404});
@@ -26,31 +32,42 @@ export async function GET(request: Request, {params}: Segments) {
    return NextResponse.json(todo);
 }
 
+
+
+const pustSchema=yup.object(
+  {
+  complete: yup.boolean().optional(),
+  description: yup.string().optional(),
+}
+)
+
+
 export async function PUT(request: Request, {params}: Segments) {
 
-  const {id} = params;
+  const { id } = await params;
+  const todo=await getTodo(id);
 
-  const todo=await prisma.todo.findUnique({
-    where:{
-      id
-    }
-  })
 
   if(!todo){  
     return NextResponse.json({message:`Todo con id ${id} no encontrado`}, {status:404});
   }
 
-  const body=await request.json();
-
-  const updatedTodo= await prisma.todo.update({
-    where:{
-      id
-    },
-    data: {...body}
-  })
-
-
-   return NextResponse.json(updatedTodo);
+  try {
+    const {complete, description}= await pustSchema.validate(await request.json());
+  
+    const updatedTodo= await prisma.todo.update({
+      where:{
+        id
+      },
+      data: {complete, description}
+    })
+  
+  
+     return NextResponse.json(updatedTodo);
+    
+  } catch (error) {
+    return NextResponse.json(error, {status:400});
+  }
 }
 
 
